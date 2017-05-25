@@ -1,0 +1,113 @@
+Big Data on AWS v3.0: Lab 1 - Streaming and Processing Apache Server Logs using Amazon Kinesis
+
+
+==================================================================================================================
+Using this command reference.
+==================================================================================================================
+
+1. Locate the section you need. Each section in this file matches a section in the lab instructions.
+
+2. Replace items in angle brackets - < > - with appropriate values. For example, in this command you would replace the value - <JobFlowID> - (including the angle brackets) with the parameter indicated in the lab instructions:
+
+elastic-mapreduce --list <JobFlowID>. You can also use find and replace to change bracketed parameters in bulk.
+
+3. Do NOT enable the Word Wrap feature in Windows Notepad or the text editor you use to view this file.
+
+==================================================================================================================
+Using Kinesis Analytics for real time analytics
+==================================================================================================================
+
++++ Step 1.2.4 Paste the following text into Amazon Kinesis Analytics application editor
+
+-- Create intermediate Stream for incoming data
+CREATE STREAM "INTERMEDIATE_STREAM" (
+  hostname VARCHAR(1024),
+  logname VARCHAR(1024),
+  username VARCHAR(1024),
+  requesttime VARCHAR(1024),
+  request VARCHAR(1024),
+  status VARCHAR(32),
+  responsesize VARCHAR(32)
+);
+
+-- Data Pump: Take incoming data from SOURCE_SQL_STREAM_001 and insert into INTERMEDIATE_STREAM
+CREATE OR REPLACE PUMP "INTERMEDIATE_STREAM_PUMP" AS
+INSERT INTO "INTERMEDIATE_STREAM"
+  SELECT STREAM
+    l.r.COLUMN1,
+    l.r.COLUMN2,
+    l.r.COLUMN3,
+    l.r.COLUMN4,
+    l.r.COLUMN5,
+    l.r.COLUMN6,
+    l.r.COLUMN7
+  FROM (SELECT STREAM W3C_LOG_PARSE("browseraction", 'COMMON')
+        FROM "SOURCE_SQL_STREAM_001"
+       ) AS l(r);
+
+-- Define output stream that stores request counts by status
+CREATE OR REPLACE STREAM "DESTINATION_SQL_STREAM" (
+   status VARCHAR(32),
+   requestCount INTEGER);
+
+-- Data Pump: Take INTERMEDIATE_STREAM and group into 1-minute intervals
+CREATE OR REPLACE PUMP "OUTPUT_PUMP" AS
+  INSERT INTO "DESTINATION_SQL_STREAM"
+    SELECT STREAM status, COUNT(*) AS requestCount
+    FROM "INTERMEDIATE_STREAM"
+    GROUP BY status, FLOOR(("INTERMEDIATE_STREAM".ROWTIME - TIMESTAMP '1970-01-01 00:00:00') minute / 1 TO MINUTE);
+
++++ Step 1.2.6 Paste text into Amazon Kinesis Analytics application editor
+
+-- Create intermediate Stream for incoming data
+CREATE STREAM "INTERMEDIATE_STREAM" (
+  hostname VARCHAR(1024),
+  logname VARCHAR(1024),
+  username VARCHAR(1024),
+  requesttime VARCHAR(1024),
+  request VARCHAR(1024),
+  status VARCHAR(32),
+  responsesize VARCHAR(32)
+);
+
+-- Data Pump: Take incoming data from SOURCE_SQL_STREAM_001 and insert into INTERMEDIATE_STREAM
+CREATE OR REPLACE PUMP "INTERMEDIATE_STREAM_PUMP" AS
+INSERT INTO "INTERMEDIATE_STREAM"
+  SELECT STREAM
+    l.r.COLUMN1,
+    l.r.COLUMN2,
+    l.r.COLUMN3,
+    l.r.COLUMN4,
+    l.r.COLUMN5,
+    l.r.COLUMN6,
+    l.r.COLUMN7
+  FROM (SELECT STREAM W3C_LOG_PARSE("browseraction", 'COMMON')
+        FROM "SOURCE_SQL_STREAM_001"
+       ) AS l(r);
+
+-- Define an output stream that stores request counts by status
+CREATE OR REPLACE STREAM "DESTINATION_SQL_STREAM" (
+   status VARCHAR(32),
+   requestCount INTEGER);
+
+-- Data Pump: Take INTERMEDIATE_STREAM and group into 1-minute intervals
+CREATE OR REPLACE PUMP "OUTPUT_PUMP" AS
+INSERT INTO "DESTINATION_SQL_STREAM"
+  SELECT STREAM status, COUNT(*) AS requestCount
+  FROM "INTERMEDIATE_STREAM"
+  GROUP BY status, FLOOR(("INTERMEDIATE_STREAM".ROWTIME - TIMESTAMP '1970-01-01 00:00:00') minute / 1 TO MINUTE);
+
+-- Define an output stream that stores HTTP request and status
+CREATE OR REPLACE STREAM "DESTINATION_SQL_STREAM_404" (
+  status VARCHAR(32),
+  request VARCHAR(64));
+
+-- Data Pump: Store status and requests in DESTINATION_SQL_STREAM_404 stream
+CREATE OR REPLACE PUMP "OUTPUT_PUMP_404" AS
+INSERT INTO "DESTINATION_SQL_STREAM_404"
+  SELECT STREAM status,request
+  FROM "INTERMEDIATE_STREAM"
+  WHERE "INTERMEDIATE_STREAM"."STATUS" = '404';
+
+
+© 2017 Amazon Web Services, Inc. or its affiliates. All rights reserved. v3.0
